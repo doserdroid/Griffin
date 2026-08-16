@@ -1,0 +1,12 @@
+# Skill: Documentación técnica y funcional
+
+Buenas prácticas genéricas de escritura de documentación de software, independientes de cualquier proyecto o stack concreto.
+
+- **Separa QUÉ de CÓMO.** La documentación funcional describe el propósito de negocio, los flujos de usuario y las reglas — nunca menciona nombres de clases, funciones o tablas. La documentación técnica describe la implementación — asume que el lector ya sabe qué problema resuelve el sistema. Mezclarlas hace que ninguna de las dos envejezca bien: la funcional se rompe con cada refactor, la técnica se vuelve ilegible para quien solo quiere entender el negocio.
+- **Escribe para quien no tiene el contexto que tú tienes ahora mismo.** Explica acrónimos y términos de dominio la primera vez, o enlaza al glosario. Evita dar por sentado el hilo de conversación en el que se generó el documento.
+- **No dupliques lo que ya vive en otro sitio autoritativo** (el propio código, el tipado, `CLAUDE.md`, un test). Si necesitas mencionarlo, enlázalo o resúmelo en una frase — no lo copies, porque se desincroniza.
+- **Un documento, una fuente de verdad.** Si un concepto aparece en dos sitios, elige uno como canónico y que el otro enlace a él. El glosario es la fuente de verdad de los términos; el diagrama de entidades, de la forma de los datos; cada ADR, de por qué se tomó su decisión.
+- **Las decisiones técnicas no triviales se documentan como ADR** (Architecture Decision Record): contexto (qué problema/situación motivó la decisión), decisión (qué se decidió), alternativas consideradas (y por qué se descartaron), consecuencias (qué se gana, qué se sacrifica, qué queda pendiente). Un ADR no se reescribe cuando la decisión cambia — se añade uno nuevo que referencia y sustituye al anterior, para conservar el porqué histórico.
+- **Los diagramas se generan en un formato que se pueda versionar y revisar como código** (Mermaid, PlantUML) — no capturas de pantalla de herramientas externas, que no se pueden diferenciar en un PR.
+- **Marca todo documento vivo como tal explícitamente** ("no regenerar desde cero, actualizar en el sitio") para que quien lo edite después sepa que debe integrarse en vez de sustituir.
+- **Prioriza la información sobre la que alguien tomará una decisión.** Un documento de arquitectura debería responder "¿puedo importar X desde Y?", uno funcional debería responder "¿qué pasa si el usuario hace Z?" — si un documento no ayuda a responder preguntas reales, probablemente sobra o le falta enfoque.
