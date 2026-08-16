@@ -1,0 +1,27 @@
+# Dependencias
+node_modules
+
+# Secretos — nunca versionar claves de API
+.env
+.env.*
+*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Griffin: historial de ejecución (telemetría local para `optimizer`, no documentación
+# curada) — griffin/history/retrospectives/ y griffin/history/README.md sí se versionan.
+griffin/history/runs.jsonl
+
+# Griffin: workspace efímero de un solo ciclo (informes largos entre agentes) —
+# griffin/workspace/README.md sí se versiona, explica qué es la carpeta.
+griffin/workspace/*
+!griffin/workspace/README.md
