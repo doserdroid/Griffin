@@ -5,7 +5,8 @@
   "description": "Sistema agéntico multi-rol para desarrollo asistido por IA, agnóstico de proyecto, construido sobre el Claude Agent SDK.",
   "type": "module",
   "scripts": {
-    "griffin": "tsx griffin/orchestrator.ts"
+    "griffin": "tsx griffin/orchestrator.ts",
+    "griffin:install-claude-code": "tsx griffin/install-claude-code.ts"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",

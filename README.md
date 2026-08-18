@@ -16,13 +16,14 @@ Este repo es el sistema en sí, sin ningún proyecto de aplicación dentro. Para
 | **tester** | Sonnet | Escribe tests (TDD), valida tests tras cambios, genera planes de pruebas de regresión | `Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob` |
 | **architecture-guardian** | Haiku | Verifica las restricciones arquitectónicas del proyecto (documentadas o inferidas) — límites entre capas/módulos, qué puede importar qué | `Read`, `Grep`, `Glob`, git de solo lectura |
 | **reviewer** | Sonnet | Revisa seguridad y calidad del código, al estilo de una revisión automática de PR (secretos, inyección, auth, deps vulnerables...) | `Read`, `Grep`, `Glob`, git de solo lectura, `npm audit` |
+| **designer** | Sonnet | Revisa UI/UX, consistencia visual y del sistema de diseño (tokens, reutilización de componentes, accesibilidad, estados de la interfaz) sobre el código de interfaz ya escrito | `Read`, `Grep`, `Glob`, git de solo lectura |
 | **verifier** | Sonnet | Comprueba, al cierre del ciclo, que el resultado final cumple el objetivo y los criterios de aceptación originales | `Read`, `Grep`, `Glob`, git de solo lectura |
 | **documenter** | Sonnet | Mantiene una wiki de documentación funcional y técnica en `docs/` del proyecto destino, siempre en inglés | `Read`, `Write`, `Edit`, `Grep`, `Glob`, git de solo lectura |
 | **optimizer** | Sonnet | Al cerrar un ciclo de trabajo (nunca automático), analiza dónde se fue el coste/tiempo y qué se corrigió a mano, y propone mejoras concretas | `Read`, `Grep`, `Glob`, git de solo lectura, `Write` (restringido a `griffin/history/retrospectives/`) |
 
 `navigator` y `architecture-guardian` corren en Haiku por defecto por ser los roles más mecánicos; el resto requiere síntesis/juicio y se queda en Sonnet. Cualquier rol se puede re-tarear por tarea con `GRIFFIN_<ROL>_MODEL=<modelo>` sin tocar su fichero.
 
-Las **skills** (`typescript`, `react`, `testing`, `documentation`) son módulos de buenas prácticas técnicas en `.agents/griffin/skills/*.md`, agnósticas de proyecto, que un rol declara en su frontmatter (`skills: typescript, react`) y se le inyectan en el prompt en tiempo de carga. Para añadir soporte a otro lenguaje/framework, basta con crear `.agents/griffin/skills/<nombre>.md` y listarlo en el rol que lo necesite.
+Las **skills** (`typescript`, `react`, `testing`, `documentation`, `design`) son módulos de buenas prácticas técnicas en `.agents/griffin/skills/*.md`, agnósticas de proyecto, que un rol declara en su frontmatter (`skills: typescript, react`) y se le inyectan en el prompt en tiempo de carga. Para añadir soporte a otro lenguaje/framework, basta con crear `.agents/griffin/skills/<nombre>.md` y listarlo en el rol que lo necesite.
 
 ## Por qué no hay un agente `orchestrator`
 
@@ -74,6 +75,9 @@ npm run griffin -- "Arregla el typo en el botón de guardar"
 
 # optimizer: solo al cerrar un ciclo de trabajo con sentido, nunca automático
 npm run griffin -- "Cerramos el módulo X. Analiza coste y errores corregidos a mano y propón mejoras"
+
+# designer: tras cambios de interfaz, para revisar consistencia visual y accesibilidad
+npm run griffin -- "Revisa el diseño de los últimos cambios en el formulario de checkout"
 ```
 
 No hay un pipeline fijo: el modelo de nivel superior decide, según la tarea, qué roles activar. `optimizer` es la única excepción explícita — nunca se invoca por iniciativa propia.
@@ -90,7 +94,15 @@ No hay un pipeline fijo: el modelo de nivel superior decide, según la tarea, qu
 
 `griffin/history/` y `griffin/workspace/` empiezan vacíos en cada copia nueva (solo con su `README.md`) — son estado de ejecución de ese proyecto concreto, no algo transferible. `documenter` sí trae una convención propia no negociable (documentar siempre en inglés, sea cual sea el idioma del proyecto destino) independiente de lo que diga el `CLAUDE.md`.
 
-Contrapartida de vivir en `.agents/griffin/` (no en `.claude/agents/`): estos roles no aparecen como subagentes en Claude Code interactivo, solo funcionan a través de `griffin/orchestrator.ts`. Si además quieres que funcionen ahí, copia a mano el fichero de rol correspondiente a `.claude/agents/<nombre>.md`.
+Contrapartida de vivir en `.agents/griffin/` (no en `.claude/agents/`): estos roles no aparecen como subagentes en Claude Code interactivo por defecto, solo funcionan a través de `griffin/orchestrator.ts`. Si además quieres invocarlos directamente dentro de una sesión de Claude Code, hay un instalador que los genera automáticamente — ver [Usarlo como subagentes nativos de Claude Code](#usarlo-también-como-subagentes-nativos-de-claude-code).
+
+## Usarlo también como subagentes nativos de Claude Code
+
+```bash
+npm run griffin:install-claude-code
+```
+
+Genera un `.claude/agents/<rol>.md` por cada rol, fundiendo las skills correspondientes dentro del prompt, para poder invocarlos directamente en una sesión de Claude Code (`@agent-reviewer`, o simplemente pidiéndolo en lenguaje natural) sin pasar por `npm run griffin`. **No es equivalente** a la ejecución normal — se pierden las barandillas de coste, el historial, el patrón de workspace, el override de modelo por variable de entorno, y las restricciones de `Bash` con patrón se relajan a `Bash` completo (con la restricción como instrucción de prompt, no técnica) en `architecture-guardian`, `documenter`, `optimizer`, `reviewer` y `verifier`. Detalle completo de qué se conserva y qué no en [`griffin/INSTALL_CLAUDE_CODE.md`](griffin/INSTALL_CLAUDE_CODE.md).
 
 ## Estructura del repo
 
@@ -102,6 +114,7 @@ Contrapartida de vivir en `.agents/griffin/` (no en `.claude/agents/`): estos ro
 ├── tester.md
 ├── architecture-guardian.md
 ├── reviewer.md
+├── designer.md
 ├── verifier.md
 ├── documenter.md
 ├── optimizer.md
@@ -109,12 +122,15 @@ Contrapartida de vivir en `.agents/griffin/` (no en `.claude/agents/`): estos ro
     ├── typescript.md
     ├── react.md
     ├── testing.md
-    └── documentation.md
+    ├── documentation.md
+    └── design.md
 
 griffin/
 ├── loadSkills.ts     # lee .agents/griffin/skills/*.md
 ├── loadAgents.ts      # lee .agents/griffin/*.md, inyecta skills, resuelve modelo
 ├── orchestrator.ts    # orquestador: invoca query() del Agent SDK
+├── install-claude-code.ts  # genera .claude/agents/<rol>.md — ver INSTALL_CLAUDE_CODE.md
+├── INSTALL_CLAUDE_CODE.md  # qué se conserva/pierde al instalarlo así
 ├── history/            # historial de ejecución + retrospectivas de `optimizer`
 │   ├── README.md
 │   ├── runs.jsonl       # no versionado — telemetría local
