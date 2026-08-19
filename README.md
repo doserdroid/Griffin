@@ -4,137 +4,159 @@
 
 # Griffin
 
-Sistema agéntico multi-rol para desarrollo asistido por IA, construido sobre el [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview). Pensado para copiarse tal cual a cualquier repositorio: ningún rol asume un stack, una arquitectura o un proyecto concreto — cada uno lee el `CLAUDE.md` (o equivalente) del proyecto destino en tiempo de ejecución.
+Multi-role agentic system for AI-assisted development, built on the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview). Designed to be installed as-is into any repository: no role assumes a particular stack, architecture, or project — each one reads the target project's `CLAUDE.md` (or equivalent) at runtime.
 
-Este repo es el sistema en sí, sin ningún proyecto de aplicación dentro. Para usarlo, se copian `.agents/griffin/` y `griffin/` al repositorio donde vayas a trabajar (ver [Instalación en otro proyecto](#instalación-en-otro-proyecto)).
+This repo is the system itself, with no application project inside it. To use it, install `.agents/griffin/` and `griffin/` into the repository you're working on (see [Installing Griffin in a project](#installing-griffin-in-a-project)).
 
-> Proyecto personal, no financiado por ninguna empresa. El coste en tokens/API es una restricción de diseño de primer orden, no un detalle de optimización posterior — ver [Coste](#coste-y-barandillas).
+> Personal project, not funded by any company. Token/API cost is a first-order design constraint, not an afterthought optimization — see [Cost and guardrails](#cost-and-guardrails).
 
 ## Roles
 
-| Rol | Modelo por defecto | Responsabilidad | Herramientas |
+| Role | Default model | Responsibility | Tools |
 |---|---|---|---|
-| **navigator** | Haiku | Explora y comprende código existente (estructura, convenciones, puntos de entrada) antes de planificar; produce un mapa conciso para `planner`. Opcional: útil en tareas grandes o zonas poco familiares del repo | `Read`, `Grep`, `Glob` |
-| **planner** | Sonnet | Descompone una tarea/feature en subtareas por capa/módulo, según la arquitectura del repo | `Read`, `Grep`, `Glob` |
-| **coder** | Sonnet | Implementa código respetando la arquitectura y el plan | `Read`, `Write`, `Edit`, `Grep`, `Glob`, Context7 (MCP) |
-| **tester** | Sonnet | Escribe tests (TDD), valida tests tras cambios, genera planes de pruebas de regresión | `Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob` |
-| **architecture-guardian** | Haiku | Verifica las restricciones arquitectónicas del proyecto (documentadas o inferidas) — límites entre capas/módulos, qué puede importar qué | `Read`, `Grep`, `Glob`, git de solo lectura |
-| **reviewer** | Sonnet | Revisa seguridad y calidad del código, al estilo de una revisión automática de PR (secretos, inyección, auth, deps vulnerables...) | `Read`, `Grep`, `Glob`, git de solo lectura, `npm audit` |
-| **designer** | Sonnet | Revisa UI/UX, consistencia visual y del sistema de diseño (tokens, reutilización de componentes, accesibilidad, estados de la interfaz) sobre el código de interfaz ya escrito | `Read`, `Grep`, `Glob`, git de solo lectura |
-| **verifier** | Sonnet | Comprueba, al cierre del ciclo, que el resultado final cumple el objetivo y los criterios de aceptación originales | `Read`, `Grep`, `Glob`, git de solo lectura |
-| **documenter** | Sonnet | Mantiene una wiki de documentación funcional y técnica en `docs/` del proyecto destino, siempre en inglés | `Read`, `Write`, `Edit`, `Grep`, `Glob`, git de solo lectura |
-| **optimizer** | Sonnet | Al cerrar un ciclo de trabajo (nunca automático), analiza dónde se fue el coste/tiempo y qué se corrigió a mano, y propone mejoras concretas | `Read`, `Grep`, `Glob`, git de solo lectura, `Write` (restringido a `griffin/history/retrospectives/`) |
+| **navigator** | Haiku | Explores and understands existing code (structure, conventions, entry points) before planning; produces a concise map for `planner`. Optional: useful on large tasks or unfamiliar parts of the repo | `Read`, `Grep`, `Glob` |
+| **planner** | Sonnet | Breaks a task/feature down into subtasks per layer/module, following the repo's architecture | `Read`, `Grep`, `Glob` |
+| **coder** | Sonnet | Implements code respecting the architecture and the plan | `Read`, `Write`, `Edit`, `Grep`, `Glob`, Context7 (MCP) |
+| **tester** | Sonnet | Writes tests (TDD), validates tests after changes, generates regression test plans | `Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob` |
+| **architecture-guardian** | Haiku | Checks the project's architectural constraints (documented or inferred) — boundaries between layers/modules, what can import what | `Read`, `Grep`, `Glob`, read-only git |
+| **reviewer** | Sonnet | Reviews security and code quality, like an automated PR review (secrets, injection, auth, vulnerable deps...) | `Read`, `Grep`, `Glob`, read-only git, `npm audit` |
+| **designer** | Sonnet | Reviews UI/UX, visual and design-system consistency (tokens, component reuse, accessibility, interface states) on already-written interface code | `Read`, `Grep`, `Glob`, read-only git |
+| **verifier** | Sonnet | At the close of a cycle, checks that the final result meets the original objective and acceptance criteria | `Read`, `Grep`, `Glob`, read-only git |
+| **documenter** | Sonnet | Maintains a functional/technical docs wiki in the target project's `docs/`, always in English | `Read`, `Write`, `Edit`, `Grep`, `Glob`, read-only git |
+| **optimizer** | Sonnet | When closing a work cycle (never automatic), analyzes where cost/time went and what got hand-fixed, and proposes concrete improvements | `Read`, `Grep`, `Glob`, read-only git, `Write` (restricted to `griffin/history/retrospectives/`) |
 
-`navigator` y `architecture-guardian` corren en Haiku por defecto por ser los roles más mecánicos; el resto requiere síntesis/juicio y se queda en Sonnet. Cualquier rol se puede re-tarear por tarea con `GRIFFIN_<ROL>_MODEL=<modelo>` sin tocar su fichero.
+`navigator` and `architecture-guardian` default to Haiku since they're the most mechanical roles; the rest require synthesis/judgment and stay on Sonnet. Any role can be re-tasked per run with `GRIFFIN_<ROLE>_MODEL=<model>` without touching its file.
 
-Las **skills** (`typescript`, `react`, `testing`, `documentation`, `design`) son módulos de buenas prácticas técnicas en `.agents/griffin/skills/*.md`, agnósticas de proyecto, que un rol declara en su frontmatter (`skills: typescript, react`) y se le inyectan en el prompt en tiempo de carga. Para añadir soporte a otro lenguaje/framework, basta con crear `.agents/griffin/skills/<nombre>.md` y listarlo en el rol que lo necesite.
+**Skills** (`typescript`, `react`, `testing`, `documentation`, `design`) are project-agnostic technical best-practice modules in `.agents/griffin/skills/*.md`, which a role declares in its frontmatter (`skills: typescript, react`) and gets injected into its prompt at load time. To add support for another language/framework, just create `.agents/griffin/skills/<name>.md` and list it in whichever role needs it.
 
-## Por qué no hay un agente `orchestrator`
+## Why there's no `orchestrator` agent
 
-En el Claude Agent SDK, un subagente no puede invocar a otros subagentes (por diseño de este sistema, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` se fija en `1`). La orquestación — decidir qué roles invocar y en qué orden — solo puede vivir en la sesión de nivel superior. `griffin/orchestrator.ts` **es** ese proceso raíz: no es un rol más, es el propio script que llama a `query()` del SDK y delega, vía su prompt, en los subagentes que declara `.agents/griffin/`.
+In the Claude Agent SDK, a subagent cannot invoke other subagents (by this system's design, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` is set to `1`). Orchestration — deciding which roles to invoke and in what order — can only live in the top-level session. `griffin/orchestrator.ts` **is** that root process: it's not another role, it's the script itself that calls the SDK's `query()` and delegates, via its prompt, to the subagents declared in `.agents/griffin/`.
 
-## Transferencia de información entre agentes: contexto directo vs. workspace
+## Passing information between agents: direct context vs. workspace
 
-Cada subagente arranca con una ventana de contexto propia y aislada — no hay memoria compartida entre subagentes de una misma sesión, y solo el mensaje final de un subagente vuelve al proceso que lo invocó (confirmado contra la [documentación oficial de subagentes](https://code.claude.com/docs/en/agent-sdk/subagents)). Relayear un output largo a varios agentes downstream vía prompt paga ese contenido íntegro, sin caché, en cada llamada.
+Each subagent starts with its own isolated context window — there's no shared memory between subagents in the same session, and only a subagent's final message goes back to the process that invoked it (confirmed against the [official subagents documentation](https://code.claude.com/docs/en/agent-sdk/subagents)). Relaying a long output to several downstream agents via prompt pays for that content in full, uncached, on every call.
 
-Por eso los roles de output largo (`navigator`, `planner`, `reviewer`, `architecture-guardian`, `verifier`) soportan opcionalmente el **Shared Workspace Pattern**: si su invocación les indica una ruta `griffin/workspace/<slug>/`, escriben ahí su resultado completo y devuelven solo la ruta; el siguiente rol la lee él mismo en vez de recibir el contenido relayeado. `coder`/`tester` quedan fuera porque su output real ya son ficheros en el propio repo. Es una optimización de coste opcional, no un requisito — para outputs cortos o un solo agente, el contexto directo sigue siendo más simple y barato. Ver `griffin/workspace/README.md`.
+That's why the long-output roles (`navigator`, `planner`, `reviewer`, `architecture-guardian`, `verifier`) optionally support the **Shared Workspace Pattern**: if their invocation points them to a `griffin/workspace/<slug>/` path, they write their full result there and return only the path; the next role reads it itself instead of receiving the relayed content. `coder`/`tester` are excluded because their real output is already files in the repo itself. It's an optional cost optimization, not a requirement — for short outputs or a single agent, direct context is still simpler and cheaper. See `griffin/workspace/README.md`.
 
-Se descartó deliberadamente una arquitectura tipo *Blackboard* (agentes que se auto-activan sobre una estructura de conocimiento compartida, sin orquestador central) por ser sobre-ingeniería para un pipeline mayoritariamente lineal como este.
+A *Blackboard*-style architecture (agents that self-activate over a shared knowledge structure, with no central orchestrator) was deliberately rejected as over-engineering for a mostly-linear pipeline like this one.
 
-## Instalación
+## Installation (of this repo, for development on Griffin itself)
 
 ```bash
 npm install @anthropic-ai/claude-agent-sdk
 npm install -D tsx typescript @types/node
 ```
 
-Requiere Node 18+. Autenticación por API key de Anthropic (`ANTHROPIC_API_KEY`, desde [platform.claude.com](https://platform.claude.com/) → Settings → API keys) — **no** el login de Claude Pro/Max, es un producto de facturación separado (pay-as-you-go).
+Requires Node 18+. Authenticates via an Anthropic API key (`ANTHROPIC_API_KEY`, from [platform.claude.com](https://platform.claude.com/) → Settings → API keys) — **not** the Claude Pro/Max login, this is a separate pay-as-you-go billing product.
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
-`CONTEXT7_API_KEY` es opcional — sin ella, [Context7](https://context7.com) (documentación de librerías siempre actualizada, disponible para `coder`) funciona en el tier gratuito con límites de tasa más bajos.
+`CONTEXT7_API_KEY` is optional — without it, [Context7](https://context7.com) (always-current library docs, available to `coder`) works on the free tier with lower rate limits.
 
-## Uso
+## Usage
 
-Dos patrones, según lo que necesites:
+Two patterns, depending on what you need:
 
 ```bash
-# A) Una sola tarea consolidada — más barato, preserva contexto entre agentes
-# dentro de la misma sesión. Recomendado para trabajo rutinario.
-npm run griffin -- "Implementa el módulo X completo: planifica, escribe tests TDD, \
-  implementa, valida, revisa seguridad y arquitectura, verifica que quede completo, \
-  y documenta el módulo"
+# A) One consolidated task — cheaper, preserves context between agents
+# within the same session. Recommended for routine work.
+npm run griffin -- "Implement module X completely: plan, write TDD tests, \
+  implement, validate, review security and architecture, verify it's complete, \
+  and document the module"
 
-# B) Invocaciones sueltas de un solo rol — para revisiones puntuales o cuando
-# quieres inspeccionar cada paso antes de seguir. Cada llamada es una sesión
-# nueva, sin el contexto de la anterior (cuesta más).
-npm run griffin -- "Explora y describe cómo funciona el módulo X antes de tocarlo"
-npm run griffin -- "Planifica la implementación completa del módulo X"
-npm run griffin -- "Revisa los últimos cambios en busca de problemas de seguridad"
-npm run griffin -- "Verifica si la tarea X quedó completa según lo planeado"
+# B) Standalone single-role calls — for one-off reviews, or when you want
+# to inspect each step before moving on. Each call is a fresh session
+# with no context from the previous one (costs more).
+npm run griffin -- "Explore and describe how module X works before touching it"
+npm run griffin -- "Plan the full implementation of module X"
+npm run griffin -- "Review the latest changes for security issues"
+npm run griffin -- "Verify whether task X is actually complete as planned"
 
-# Cambios pequeños no necesitan mencionar ningún rol — el orquestador decide:
-npm run griffin -- "Arregla el typo en el botón de guardar"
+# Small changes don't need to mention any role — the orchestrator decides:
+npm run griffin -- "Fix the typo in the save button"
 
-# optimizer: solo al cerrar un ciclo de trabajo con sentido, nunca automático
-npm run griffin -- "Cerramos el módulo X. Analiza coste y errores corregidos a mano y propón mejoras"
+# optimizer: only when meaningfully closing a work cycle, never automatic
+npm run griffin -- "We're closing module X. Analyze cost and hand-fixed errors and propose improvements"
 
-# designer: tras cambios de interfaz, para revisar consistencia visual y accesibilidad
-npm run griffin -- "Revisa el diseño de los últimos cambios en el formulario de checkout"
+# designer: after UI changes, to review visual consistency and accessibility
+npm run griffin -- "Review the design of the latest changes to the checkout form"
 ```
 
-No hay un pipeline fijo: el modelo de nivel superior decide, según la tarea, qué roles activar. `optimizer` es la única excepción explícita — nunca se invoca por iniciativa propia.
+There's no fixed pipeline: the top-level model decides which roles to activate based on the task. `optimizer` is the one explicit exception — it's never invoked on its own initiative.
 
-## Instalación en otro proyecto
+## Installing Griffin in a project
 
-Se instala como **git subtree**, no copiando ficheros a mano — un copy-paste no versionado no tiene forma de saber si el destino está desactualizado (así fue como una instalación anterior se quedó sin el rol `designer` durante días sin que nadie lo notara) ni de distinguir un fichero de Griffin sin tocar de uno con personalización local del proyecto.
+Griffin ships as a **git subtree**, not a manual file copy. A plain copy-paste has no way to tell whether a project has fallen behind, or to tell a stock Griffin file apart from one with local edits — that's literally how a previous install silently missed the `designer` role for days. Subtree fixes both: it's real, trackable history, and `git subtree pull` is the one command that brings a project up to date.
 
-1. Desde la raíz del repositorio destino (con el working tree limpio):
-   ```bash
-   git subtree add --prefix=griffin https://github.com/doserdroid/Griffin.git subtree-griffin --squash
-   git subtree add --prefix=.agents/griffin https://github.com/doserdroid/Griffin.git subtree-agents-griffin --squash
-   ```
-   `subtree-griffin` y `subtree-agents-griffin` son ramas de este repo que contienen, cada una, solo el historial de `griffin/` y `.agents/griffin/` respectivamente (generadas con `git subtree split --prefix=<carpeta> -b <rama>`) — **no** uses `main`: al no estar filtrada por carpeta, traería el repo entero (README, LICENSE...) dentro del prefijo destino.
-2. Añade los scripts a su `package.json`:
-   ```json
-   "scripts": {
-     "griffin": "tsx griffin/orchestrator.ts",
-     "griffin:install-claude-code": "tsx griffin/install-claude-code.ts"
-   }
-   ```
-3. Instala las dependencias (ver [Instalación](#instalación)).
-4. Si el proyecto destino tiene un `CLAUDE.md` (o documentación de arquitectura equivalente), los roles lo leerán automáticamente. Si no existe, cada rol sigue el patrón que detecte en el código ya presente.
+### First-time install
 
-**Nunca edites ficheros dentro de `griffin/` o `.agents/griffin/`** — son código vendido, cualquier cambio local se pierde o entra en conflicto en el próximo `subtree pull`. Cualquier nota o convención específica del proyecto destino va en su `CLAUDE.md` (que `orchestrator.ts` ya carga vía `settingSources: ["project"]`), nunca en un comentario dentro de un `.ts` o `.md` de Griffin.
+From the target project's repo root, with a clean working tree:
 
-Para traer actualizaciones (p. ej. un rol nuevo como `designer`):
+```bash
+git subtree add --prefix=griffin https://github.com/doserdroid/Griffin.git subtree-griffin --squash
+git subtree add --prefix=.agents/griffin https://github.com/doserdroid/Griffin.git subtree-agents-griffin --squash
+```
+
+`subtree-griffin` and `subtree-agents-griffin` are branches of this repo, each containing only the history of `griffin/` and `.agents/griffin/` respectively (generated with `git subtree split --prefix=<folder> -b <branch>`). **Do not use `main`** — it isn't filtered by folder, so it would pull this entire repo (README, LICENSE...) into whichever prefix you point it at.
+
+Then, add the scripts to the target project's `package.json`:
+
+```json
+"scripts": {
+  "griffin": "tsx griffin/orchestrator.ts",
+  "griffin:install-claude-code": "tsx griffin/install-claude-code.ts"
+}
+```
+
+Install the dependencies (same two commands as [Installation](#installation-of-this-repo-for-development-on-griffin-itself) above), and if the target project has a `CLAUDE.md` (or equivalent architecture docs), the roles will read it automatically at runtime. If it doesn't exist, each role just follows the patterns it detects in the code already present.
+
+**Never edit files inside `griffin/` or `.agents/griffin/`.** They're vendored code — any local change is either lost or turns into a conflict on the next `subtree pull`. Anything project-specific (notes, conventions, exceptions) belongs in that project's own `CLAUDE.md`, which `orchestrator.ts` already loads via `settingSources: ["project"]` — never in a comment inside a Griffin `.ts` or `.md` file.
+
+### Keeping a project up to date
+
+Whenever Griffin gets an update (a new role, a fixed prompt, whatever) and you want it in a given project:
+
 ```bash
 git subtree pull --prefix=griffin https://github.com/doserdroid/Griffin.git subtree-griffin --squash
 git subtree pull --prefix=.agents/griffin https://github.com/doserdroid/Griffin.git subtree-agents-griffin --squash
 ```
 
-**Mantenimiento de `subtree-griffin`/`subtree-agents-griffin` (solo si tocas este repo):** son ramas derivadas, no se editan directamente. Tras cualquier cambio en `griffin/` o `.agents/griffin/` en `main`, regenéralas y publícalas antes de que los proyectos destino puedan hacer `pull`:
+If that project also uses Griffin as native Claude Code subagents, regenerate them afterwards:
+
+```bash
+npm run griffin:install-claude-code
+```
+
+Pulling is on-demand, per project — there's no auto-update. Nothing here should ever conflict, since you never hand-edit vendored files; if a conflict ever does show up, treat it like any normal git merge conflict.
+
+`griffin/history/` and `griffin/workspace/` do start empty on a fresh install (just their `README.md`) — they're that project's own runtime state, not something meant to travel between projects. They coexist fine with the subtree, since a `subtree pull` only touches what changed upstream, never files you added locally inside those two folders.
+
+`documenter` brings one non-negotiable convention of its own (always document in English, whatever language the target project uses) regardless of what `CLAUDE.md` says.
+
+### Publishing a Griffin update (maintainers of this repo)
+
+`subtree-griffin` and `subtree-agents-griffin` are derived branches — never edit them directly. After any change to `griffin/` or `.agents/griffin/` on `main`, regenerate and publish them before any project can `pull` the update:
+
 ```bash
 git subtree split --prefix=griffin --rejoin -b subtree-griffin
 git subtree split --prefix=.agents/griffin --rejoin -b subtree-agents-griffin
 git push origin subtree-griffin subtree-agents-griffin
 ```
 
-`griffin/history/` y `griffin/workspace/` sí empiezan vacíos en cada instalación nueva (solo con su `README.md`) — son estado de ejecución de ese proyecto concreto, no algo transferible; conviven sin problema con el subtree porque un `subtree pull` solo toca lo que cambió río arriba, nunca ficheros añadidos localmente en esas dos carpetas. `documenter` sí trae una convención propia no negociable (documentar siempre en inglés, sea cual sea el idioma del proyecto destino) independiente de lo que diga el `CLAUDE.md`.
+Trade-off of living in `.agents/griffin/` rather than `.claude/agents/`: these roles don't show up as native Claude Code subagents by default — they only work through `griffin/orchestrator.ts`. If you also want to invoke them directly inside an interactive Claude Code session, there's an installer that generates them automatically — see [Also usable as native Claude Code subagents](#also-usable-as-native-claude-code-subagents).
 
-Contrapartida de vivir en `.agents/griffin/` (no en `.claude/agents/`): estos roles no aparecen como subagentes en Claude Code interactivo por defecto, solo funcionan a través de `griffin/orchestrator.ts`. Si además quieres invocarlos directamente dentro de una sesión de Claude Code, hay un instalador que los genera automáticamente — ver [Usarlo como subagentes nativos de Claude Code](#usarlo-también-como-subagentes-nativos-de-claude-code).
-
-## Usarlo también como subagentes nativos de Claude Code
+## Also usable as native Claude Code subagents
 
 ```bash
 npm run griffin:install-claude-code
 ```
 
-Genera un `.claude/agents/<rol>.md` por cada rol, fundiendo las skills correspondientes dentro del prompt, para poder invocarlos directamente en una sesión de Claude Code (`@agent-reviewer`, o simplemente pidiéndolo en lenguaje natural) sin pasar por `npm run griffin`. **No es equivalente** a la ejecución normal — se pierden las barandillas de coste, el historial, el patrón de workspace, el override de modelo por variable de entorno, y las restricciones de `Bash` con patrón se relajan a `Bash` completo (con la restricción como instrucción de prompt, no técnica) en `architecture-guardian`, `documenter`, `optimizer`, `reviewer` y `verifier`. Detalle completo de qué se conserva y qué no en [`griffin/INSTALL_CLAUDE_CODE.md`](griffin/INSTALL_CLAUDE_CODE.md).
+Generates a `.claude/agents/<role>.md` for each role, merging the relevant skills into the prompt, so you can invoke them directly in a Claude Code session (`@agent-reviewer`, or just asking in natural language) without going through `npm run griffin`. **This is not equivalent** to normal execution — you lose the cost guardrails, the run history, the workspace pattern, the per-role model override env var, and the pattern-scoped `Bash` restrictions relax to full `Bash` (kept only as a prompt instruction, not a technical one) on `architecture-guardian`, `documenter`, `optimizer`, `reviewer`, and `verifier`. Full detail on what's kept and what's lost in [`griffin/INSTALL_CLAUDE_CODE.md`](griffin/INSTALL_CLAUDE_CODE.md).
 
-## Estructura del repo
+## Repo structure
 
 ```
 .agents/griffin/
@@ -156,33 +178,41 @@ Genera un `.claude/agents/<rol>.md` por cada rol, fundiendo las skills correspon
     └── design.md
 
 griffin/
-├── loadSkills.ts     # lee .agents/griffin/skills/*.md
-├── loadAgents.ts      # lee .agents/griffin/*.md, inyecta skills, resuelve modelo
-├── orchestrator.ts    # orquestador: invoca query() del Agent SDK
-├── install-claude-code.ts  # genera .claude/agents/<rol>.md — ver INSTALL_CLAUDE_CODE.md
-├── INSTALL_CLAUDE_CODE.md  # qué se conserva/pierde al instalarlo así
-├── history/            # historial de ejecución + retrospectivas de `optimizer`
+├── loadSkills.ts     # reads .agents/griffin/skills/*.md
+├── loadAgents.ts      # reads .agents/griffin/*.md, injects skills, resolves model
+├── orchestrator.ts    # orchestrator: invokes the Agent SDK's query()
+├── install-claude-code.ts  # generates .claude/agents/<role>.md — see INSTALL_CLAUDE_CODE.md
+├── INSTALL_CLAUDE_CODE.md  # what's kept/lost when installed this way
+├── history/            # run history + `optimizer` retrospectives
 │   ├── README.md
-│   ├── runs.jsonl       # no versionado — telemetría local
+│   ├── runs.jsonl       # not version-controlled — local telemetry
 │   └── retrospectives/
-└── workspace/           # scratch efímero entre agentes para outputs largos
-    └── README.md         # el resto de esta carpeta no se versiona
+└── workspace/           # ephemeral scratch space between agents for long outputs
+    └── README.md         # the rest of this folder isn't version-controlled
 ```
 
-## Coste y barandillas
+## Cost and guardrails
 
-Este sistema está pensado para uso personal sin presupuesto corporativo detrás, así que el coste es una restricción de diseño, no un detalle:
+This system is meant for personal use with no corporate budget behind it, so cost is a design constraint, not an afterthought:
 
-- `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH="1"` — un subagente no puede invocar a otros subagentes, evitando que el coste se dispare de forma exponencial sin que te des cuenta.
-- `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS="3"` — limita cuánto puede dispararse el gasto *por minuto* si algo se descontrola.
-- `maxBudgetUsd` — techo de gasto por invocación (3 $ por defecto), configurable con `GRIFFIN_MAX_BUDGET_USD`.
-- `coder` no tiene `Bash`. El resto de roles con acceso a `Bash`/git lo tienen restringido a comandos de solo lectura (`git diff`/`log`/`show`/`status`, `npm audit` sin `--fix`) — ninguno puede mutar el repo fuera de `Write`/`Edit` en su alcance declarado.
-- `optimizer` nunca edita `.agents/griffin/*.md` directamente, aunque técnicamente tenga `Write` — solo puede escribir en `griffin/history/retrospectives/`. Un sistema que se reescribe a sí mismo basándose en su propio análisis de sus propios errores es un bucle de retroalimentación difícil de auditar; sus propuestas quedan para que una persona decida aplicarlas.
-- Model tiering: `navigator` y `architecture-guardian` en Haiku por defecto — los roles más mecánicos, no los que requieren síntesis.
-- Prefiere el patrón de llamada consolidada (A) sobre invocaciones sueltas (B) para trabajo de confianza: cada invocación de CLI es una sesión nueva que relee `CLAUDE.md` y no hereda contexto de la anterior.
+- `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH="1"` — a subagent can't invoke other subagents, preventing cost from exploding exponentially without you noticing.
+- `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS="3"` — caps how much spend can spike *per minute* if something runs away.
+- `maxBudgetUsd` — spend ceiling per invocation ($3 by default), configurable via `GRIFFIN_MAX_BUDGET_USD`.
+- `coder` has no `Bash`. Every other role with `Bash`/git access has it restricted to read-only commands (`git diff`/`log`/`show`/`status`, `npm audit` without `--fix`) — none of them can mutate the repo outside the `Write`/`Edit` scope they're declared to have.
+- `optimizer` never edits `.agents/griffin/*.md` directly, even though it technically has `Write` — it can only write to `griffin/history/retrospectives/`. A system that rewrites itself based on its own analysis of its own mistakes is a feedback loop that's hard to audit; its proposals are left for a person to decide whether to apply.
+- Model tiering: `navigator` and `architecture-guardian` default to Haiku — the most mechanical roles, not the ones that need synthesis.
+- Prefer the consolidated-call pattern (A) over standalone calls (B) for trusted work: every CLI invocation is a fresh session that re-reads `CLAUDE.md` and doesn't inherit context from the previous one.
 
-Ninguna de estas barandillas son restos de una prueba de concepto — si se ajustan, que sea de forma consciente, documentada, y sustituyéndolas por algo equivalente.
+None of these guardrails are proof-of-concept leftovers — if you adjust them, do it deliberately, documented, and replaced with something equivalent.
 
-## Licencia
+## Contributing
 
-MIT — ver [LICENSE](LICENSE).
+This is a young personal project going open source — issues and PRs are welcome. A few things worth knowing before opening one:
+
+- Roles live in `.agents/griffin/*.md` (frontmatter + prompt) and skills in `.agents/griffin/skills/*.md` — both are plain markdown, no build step, easy to read end-to-end before changing.
+- If you change `griffin/` or `.agents/griffin/`, remember the [subtree split/push step](#publishing-a-griffin-update-maintainers-of-this-repo) is what actually ships the change to consuming projects — a plain merge to `main` alone doesn't.
+- Keep new roles/skills project-agnostic — nothing in `.agents/griffin/` should assume a specific stack, language, or repo layout.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
