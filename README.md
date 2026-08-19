@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="canvas.png" alt="Griffin" width="220">
+</p>
+
 # Griffin
 
 Sistema agéntico multi-rol para desarrollo asistido por IA, construido sobre el [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview). Pensado para copiarse tal cual a cualquier repositorio: ningún rol asume un stack, una arquitectura o un proyecto concreto — cada uno lee el `CLAUDE.md` (o equivalente) del proyecto destino en tiempo de ejecución.
