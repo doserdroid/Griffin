@@ -44,7 +44,8 @@ Se descartó deliberadamente una arquitectura tipo *Blackboard* (agentes que se 
 ## Instalación
 
 ```bash
-npm install -D @anthropic-ai/claude-agent-sdk tsx
+npm install @anthropic-ai/claude-agent-sdk
+npm install -D tsx typescript @types/node
 ```
 
 Requiere Node 18+. Autenticación por API key de Anthropic (`ANTHROPIC_API_KEY`, desde [platform.claude.com](https://platform.claude.com/) → Settings → API keys) — **no** el login de Claude Pro/Max, es un producto de facturación separado (pay-as-you-go).
@@ -88,15 +89,32 @@ No hay un pipeline fijo: el modelo de nivel superior decide, según la tarea, qu
 
 ## Instalación en otro proyecto
 
-1. Copia `.agents/griffin/` y `griffin/` al repositorio destino, tal cual.
-2. Añade el script a su `package.json`:
+Se instala como **git subtree**, no copiando ficheros a mano — un copy-paste no versionado no tiene forma de saber si el destino está desactualizado (así fue como una instalación anterior se quedó sin el rol `designer` durante días sin que nadie lo notara) ni de distinguir un fichero de Griffin sin tocar de uno con personalización local del proyecto.
+
+1. Desde la raíz del repositorio destino (con el working tree limpio):
+   ```bash
+   git subtree add --prefix=griffin <ruta-o-URL-de-este-repo> main --squash
+   git subtree add --prefix=.agents/griffin <ruta-o-URL-de-este-repo> main --squash
+   ```
+2. Añade los scripts a su `package.json`:
    ```json
-   "scripts": { "griffin": "tsx griffin/orchestrator.ts" }
+   "scripts": {
+     "griffin": "tsx griffin/orchestrator.ts",
+     "griffin:install-claude-code": "tsx griffin/install-claude-code.ts"
+   }
    ```
 3. Instala las dependencias (ver [Instalación](#instalación)).
 4. Si el proyecto destino tiene un `CLAUDE.md` (o documentación de arquitectura equivalente), los roles lo leerán automáticamente. Si no existe, cada rol sigue el patrón que detecte en el código ya presente.
 
-`griffin/history/` y `griffin/workspace/` empiezan vacíos en cada copia nueva (solo con su `README.md`) — son estado de ejecución de ese proyecto concreto, no algo transferible. `documenter` sí trae una convención propia no negociable (documentar siempre en inglés, sea cual sea el idioma del proyecto destino) independiente de lo que diga el `CLAUDE.md`.
+**Nunca edites ficheros dentro de `griffin/` o `.agents/griffin/`** — son código vendido, cualquier cambio local se pierde o entra en conflicto en el próximo `subtree pull`. Cualquier nota o convención específica del proyecto destino va en su `CLAUDE.md` (que `orchestrator.ts` ya carga vía `settingSources: ["project"]`), nunca en un comentario dentro de un `.ts` o `.md` de Griffin.
+
+Para traer actualizaciones (p. ej. un rol nuevo como `designer`):
+```bash
+git subtree pull --prefix=griffin <ruta-o-URL-de-este-repo> main --squash
+git subtree pull --prefix=.agents/griffin <ruta-o-URL-de-este-repo> main --squash
+```
+
+`griffin/history/` y `griffin/workspace/` sí empiezan vacíos en cada instalación nueva (solo con su `README.md`) — son estado de ejecución de ese proyecto concreto, no algo transferible; conviven sin problema con el subtree porque un `subtree pull` solo toca lo que cambió río arriba, nunca ficheros añadidos localmente en esas dos carpetas. `documenter` sí trae una convención propia no negociable (documentar siempre en inglés, sea cual sea el idioma del proyecto destino) independiente de lo que diga el `CLAUDE.md`.
 
 Contrapartida de vivir en `.agents/griffin/` (no en `.claude/agents/`): estos roles no aparecen como subagentes en Claude Code interactivo por defecto, solo funcionan a través de `griffin/orchestrator.ts`. Si además quieres invocarlos directamente dentro de una sesión de Claude Code, hay un instalador que los genera automáticamente — ver [Usarlo como subagentes nativos de Claude Code](#usarlo-también-como-subagentes-nativos-de-claude-code).
 
