@@ -93,9 +93,10 @@ Se instala como **git subtree**, no copiando ficheros a mano — un copy-paste n
 
 1. Desde la raíz del repositorio destino (con el working tree limpio):
    ```bash
-   git subtree add --prefix=griffin <ruta-o-URL-de-este-repo> main --squash
-   git subtree add --prefix=.agents/griffin <ruta-o-URL-de-este-repo> main --squash
+   git subtree add --prefix=griffin https://github.com/doserdroid/Griffin.git subtree-griffin --squash
+   git subtree add --prefix=.agents/griffin https://github.com/doserdroid/Griffin.git subtree-agents-griffin --squash
    ```
+   `subtree-griffin` y `subtree-agents-griffin` son ramas de este repo que contienen, cada una, solo el historial de `griffin/` y `.agents/griffin/` respectivamente (generadas con `git subtree split --prefix=<carpeta> -b <rama>`) — **no** uses `main`: al no estar filtrada por carpeta, traería el repo entero (README, LICENSE...) dentro del prefijo destino.
 2. Añade los scripts a su `package.json`:
    ```json
    "scripts": {
@@ -110,8 +111,15 @@ Se instala como **git subtree**, no copiando ficheros a mano — un copy-paste n
 
 Para traer actualizaciones (p. ej. un rol nuevo como `designer`):
 ```bash
-git subtree pull --prefix=griffin <ruta-o-URL-de-este-repo> main --squash
-git subtree pull --prefix=.agents/griffin <ruta-o-URL-de-este-repo> main --squash
+git subtree pull --prefix=griffin https://github.com/doserdroid/Griffin.git subtree-griffin --squash
+git subtree pull --prefix=.agents/griffin https://github.com/doserdroid/Griffin.git subtree-agents-griffin --squash
+```
+
+**Mantenimiento de `subtree-griffin`/`subtree-agents-griffin` (solo si tocas este repo):** son ramas derivadas, no se editan directamente. Tras cualquier cambio en `griffin/` o `.agents/griffin/` en `main`, regenéralas y publícalas antes de que los proyectos destino puedan hacer `pull`:
+```bash
+git subtree split --prefix=griffin --rejoin -b subtree-griffin
+git subtree split --prefix=.agents/griffin --rejoin -b subtree-agents-griffin
+git push origin subtree-griffin subtree-agents-griffin
 ```
 
 `griffin/history/` y `griffin/workspace/` sí empiezan vacíos en cada instalación nueva (solo con su `README.md`) — son estado de ejecución de ese proyecto concreto, no algo transferible; conviven sin problema con el subtree porque un `subtree pull` solo toca lo que cambió río arriba, nunca ficheros añadidos localmente en esas dos carpetas. `documenter` sí trae una convención propia no negociable (documentar siempre en inglés, sea cual sea el idioma del proyecto destino) independiente de lo que diga el `CLAUDE.md`.
